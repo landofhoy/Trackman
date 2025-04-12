@@ -12,5 +12,6 @@ export default defineConfig({
   base: '/Trackman/',
   build: {
     outDir: 'dist',
+    sourcemap: true
   },
 })

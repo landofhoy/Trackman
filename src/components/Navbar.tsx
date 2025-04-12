@@ -22,6 +22,7 @@ import {
   Download as DownloadIcon,
   Brightness4 as DarkModeIcon,
   ExitToApp as SignOutIcon,
+  Logout as LogoutIcon,
 } from '@mui/icons-material';
 
 const Navbar = () => {
@@ -50,6 +51,11 @@ const Navbar = () => {
 
   const handleExportData = () => {
     // This would trigger the export functionality from the Profile page
+    handleMenuClose();
+  };
+
+  const handleSignOut = () => {
+    // This would trigger the sign out functionality
     handleMenuClose();
   };
 
@@ -117,54 +123,17 @@ const Navbar = () => {
           anchorEl={anchorEl}
           open={Boolean(anchorEl)}
           onClose={handleMenuClose}
-          anchorOrigin={{
-            vertical: 'bottom',
-            horizontal: 'right',
-          }}
-          transformOrigin={{
-            vertical: 'top',
-            horizontal: 'right',
-          }}
-          PaperProps={{
-            sx: {
-              mt: 1,
-              width: 220,
-            }
-          }}
+          onClick={handleMenuClose}
         >
-          <MenuItem onClick={handleProfileClick}>
+          <MenuItem onClick={() => navigate('/profile')}>
             <ListItemIcon>
               <PersonIcon fontSize="small" />
             </ListItemIcon>
             My Profile
           </MenuItem>
-          <MenuItem onClick={handleMenuClose}>
+          <MenuItem onClick={handleSignOut}>
             <ListItemIcon>
-              <SettingsIcon fontSize="small" />
-            </ListItemIcon>
-            Account Settings
-          </MenuItem>
-          
-          <Divider />
-          
-          <MenuItem onClick={handleExportData}>
-            <ListItemIcon>
-              <DownloadIcon fontSize="small" />
-            </ListItemIcon>
-            Export My Data
-          </MenuItem>
-          <MenuItem onClick={handleMenuClose}>
-            <ListItemIcon>
-              <DarkModeIcon fontSize="small" />
-            </ListItemIcon>
-            Dark Mode
-          </MenuItem>
-          
-          <Divider />
-          
-          <MenuItem onClick={handleMenuClose} sx={{ color: 'error.main' }}>
-            <ListItemIcon>
-              <SignOutIcon fontSize="small" color="error" />
+              <LogoutIcon fontSize="small" />
             </ListItemIcon>
             Sign Out
           </MenuItem>

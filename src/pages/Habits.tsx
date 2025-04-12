@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import {
   Container,
   Typography,
-  Box,
   Paper,
   List,
   ListItem,
@@ -15,147 +14,128 @@ import {
   DialogContent,
   DialogActions,
   TextField,
-  Chip,
-  Select,
-  MenuItem,
-  FormControl,
-  InputLabel,
-  Tooltip,
-  Snackbar,
-  Alert,
+  Box,
+  CircularProgress
 } from '@mui/material';
 import {
-  Add as AddIcon,
   Check as CheckIcon,
-  Delete as DeleteIcon,
-  FitnessCenter as FitnessIcon,
-  SelfImprovement as MeditationIcon,
-  Book as BookIcon,
-  Work as WorkIcon,
-  LocalDining as FoodIcon,
+  Add as AddIcon,
+  Delete as DeleteIcon
 } from '@mui/icons-material';
-import { initialHabits } from '../data/initialData';
+import { collection, query, where, getDocs, addDoc, deleteDoc, doc, Timestamp } from 'firebase/firestore';
+import { db } from '../config/firebase';
+import { useAuth } from '../context/AuthContext';
 
 interface Habit {
-  id: number;
+  id: string;
   name: string;
-  category: string;
-  completed: boolean;
-  streak: number;
-  longestStreak: number;
-  lastCompleted: string | null;
+  isCompletedToday: boolean;
 }
 
-const CATEGORIES = [
-  { value: 'fitness', label: 'Fitness', icon: <FitnessIcon /> },
-  { value: 'mindfulness', label: 'Mindfulness', icon: <MeditationIcon /> },
-  { value: 'learning', label: 'Learning', icon: <BookIcon /> },
-  { value: 'work', label: 'Work', icon: <WorkIcon /> },
-  { value: 'nutrition', label: 'Nutrition', icon: <FoodIcon /> },
-];
-
-const MOTIVATIONAL_MESSAGES = {
-  streak: {
-    1: "Great start! Keep it going!",
-    3: "You're building momentum!",
-    7: "One week strong! Amazing!",
-    14: "Two weeks! You're unstoppable!",
-    21: "Three weeks! You're forming a habit!",
-    30: "One month! You're incredible!",
-  },
-};
-
-const Habits: React.FC = () => {
-  const [habits, setHabits] = useState<Habit[]>(() => {
-    const saved = localStorage.getItem('habits');
-    if (!saved) {
-      localStorage.setItem('habits', JSON.stringify(initialHabits));
-      return initialHabits;
-    }
-    return JSON.parse(saved);
-  });
+const Habits = () => {
+  const { currentUser } = useAuth();
+  const [habits, setHabits] = useState<Habit[]>([]);
   const [open, setOpen] = useState(false);
   const [newHabitName, setNewHabitName] = useState('');
-  const [newHabitCategory, setNewHabitCategory] = useState('fitness');
-  const [message, setMessage] = useState<string | null>(null);
-  const [showMessage, setShowMessage] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    localStorage.setItem('habits', JSON.stringify(habits));
-  }, [habits]);
+  const fetchHabits = async () => {
+    if (!currentUser) return;
 
-  const toggleHabit = (id: number) => {
-    const today = new Date().toISOString().split('T')[0];
-    setHabits(habits.map(habit => {
-      if (habit.id === id) {
-        const completed = !habit.completed;
-        let streak = habit.streak;
-        let longestStreak = habit.longestStreak;
+    try {
+      const habitsQuery = query(
+        collection(db, 'habits'),
+        where('userId', '==', currentUser.uid)
+      );
+      const habitsSnapshot = await getDocs(habitsQuery);
+      
+      // Get today's date at midnight for comparison
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
 
-        if (completed) {
-          const yesterday = new Date();
-          yesterday.setDate(yesterday.getDate() - 1);
-          const yesterdayStr = yesterday.toISOString().split('T')[0];
-          
-          if (habit.lastCompleted === yesterdayStr) {
-            streak += 1;
-            if (streak > longestStreak) {
-              longestStreak = streak;
-            }
-            if (streak in MOTIVATIONAL_MESSAGES.streak) {
-              setMessage(MOTIVATIONAL_MESSAGES.streak[streak as keyof typeof MOTIVATIONAL_MESSAGES.streak]);
-              setShowMessage(true);
-            }
-          } else if (habit.lastCompleted !== today) {
-            streak = 1;
-          }
-        }
+      // Get all completions for today
+      const completionsQuery = query(
+        collection(db, 'completions'),
+        where('userId', '==', currentUser.uid),
+        where('date', '>=', today)
+      );
+      const completionsSnapshot = await getDocs(completionsQuery);
+      const completedHabitIds = new Set(
+        completionsSnapshot.docs.map(doc => doc.data().habitId)
+      );
 
-        return {
-          ...habit,
-          completed,
-          streak,
-          longestStreak,
-          lastCompleted: completed ? today : habit.lastCompleted
-        };
-      }
-      return habit;
-    }));
-  };
+      const habitsList = habitsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        name: doc.data().name,
+        isCompletedToday: completedHabitIds.has(doc.id)
+      }));
 
-  const addHabit = () => {
-    if (newHabitName.trim()) {
-      const newHabit: Habit = {
-        id: Date.now(),
-        name: newHabitName.trim(),
-        category: newHabitCategory,
-        completed: false,
-        streak: 0,
-        longestStreak: 0,
-        lastCompleted: null,
-      };
-      setHabits([...habits, newHabit]);
-      setNewHabitName('');
-      setNewHabitCategory('fitness');
-      setOpen(false);
+      setHabits(habitsList);
+      setLoading(false);
+    } catch (error) {
+      console.error('Error fetching habits:', error);
+      setLoading(false);
     }
   };
 
-  const deleteHabit = (id: number) => {
-    setHabits(habits.filter(habit => habit.id !== id));
+  useEffect(() => {
+    fetchHabits();
+  }, [currentUser]);
+
+  const handleAddHabit = async () => {
+    if (!currentUser || !newHabitName.trim()) return;
+
+    try {
+      await addDoc(collection(db, 'habits'), {
+        name: newHabitName.trim(),
+        userId: currentUser.uid,
+        createdAt: Timestamp.now()
+      });
+      setNewHabitName('');
+      setOpen(false);
+      fetchHabits();
+    } catch (error) {
+      console.error('Error adding habit:', error);
+    }
   };
 
-  const getCategoryIcon = (category: string) => {
-    return CATEGORIES.find(cat => cat.value === category)?.icon || <FitnessIcon />;
+  const handleDeleteHabit = async (habitId: string) => {
+    try {
+      await deleteDoc(doc(db, 'habits', habitId));
+      fetchHabits();
+    } catch (error) {
+      console.error('Error deleting habit:', error);
+    }
   };
+
+  const handleComplete = async (habitId: string) => {
+    if (!currentUser) return;
+
+    try {
+      await addDoc(collection(db, 'completions'), {
+        habitId,
+        userId: currentUser.uid,
+        date: Timestamp.now()
+      });
+      fetchHabits();
+    } catch (error) {
+      console.error('Error completing habit:', error);
+    }
+  };
+
+  if (loading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
 
   return (
-    <Container maxWidth="sm">
+    <Container maxWidth="md">
       <Box sx={{ py: 4 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-          <Typography variant="h4" component="h1">
-            Daily Dashboard
-          </Typography>
+          <Typography variant="h4">My Habits</Typography>
           <Button
             variant="contained"
             startIcon={<AddIcon />}
@@ -165,60 +145,39 @@ const Habits: React.FC = () => {
           </Button>
         </Box>
 
-        <Paper elevation={3}>
+        <Paper>
           <List>
             {habits.map((habit) => (
               <ListItem
                 key={habit.id}
-                divider
                 sx={{
-                  backgroundColor: habit.completed ? 'action.hover' : 'background.paper',
+                  borderLeft: 6,
+                  borderColor: habit.isCompletedToday ? 'success.main' : 'transparent',
+                  bgcolor: habit.isCompletedToday ? 'success.light' : 'transparent',
+                  '&:hover': {
+                    bgcolor: habit.isCompletedToday ? 'success.light' : 'action.hover'
+                  }
                 }}
               >
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                  {getCategoryIcon(habit.category)}
-                  <ListItemText
-                    primary={habit.name}
-                    secondary={
-                      <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
-                        <Chip
-                          label={`🔥 ${habit.streak} day streak`}
-                          size="small"
-                          color={habit.streak > 0 ? 'primary' : 'default'}
-                        />
-                        <Chip
-                          label={`🏆 ${habit.longestStreak} day record`}
-                          size="small"
-                          variant="outlined"
-                        />
-                        <Chip
-                          label={CATEGORIES.find(cat => cat.value === habit.category)?.label}
-                          size="small"
-                          variant="outlined"
-                        />
-                      </Box>
-                    }
-                  />
-                </Box>
+                <ListItemText
+                  primary={habit.name}
+                />
                 <ListItemSecondaryAction>
-                  <Tooltip title={habit.completed ? "Mark as incomplete" : "Mark as complete"}>
-                    <IconButton
-                      edge="end"
-                      onClick={() => toggleHabit(habit.id)}
-                      color={habit.completed ? 'success' : 'default'}
-                    >
-                      <CheckIcon />
-                    </IconButton>
-                  </Tooltip>
-                  <Tooltip title="Delete habit">
-                    <IconButton
-                      edge="end"
-                      onClick={() => deleteHabit(habit.id)}
-                      color="error"
-                    >
-                      <DeleteIcon />
-                    </IconButton>
-                  </Tooltip>
+                  <IconButton
+                    edge="end"
+                    onClick={() => handleComplete(habit.id)}
+                    disabled={habit.isCompletedToday}
+                    color={habit.isCompletedToday ? 'success' : 'default'}
+                  >
+                    <CheckIcon />
+                  </IconButton>
+                  <IconButton
+                    edge="end"
+                    onClick={() => handleDeleteHabit(habit.id)}
+                    sx={{ ml: 1 }}
+                  >
+                    <DeleteIcon />
+                  </IconButton>
                 </ListItemSecondaryAction>
               </ListItem>
             ))}
@@ -226,8 +185,7 @@ const Habits: React.FC = () => {
               <ListItem>
                 <ListItemText
                   primary="No habits yet"
-                  secondary="Click the 'Add Habit' button to get started"
-                  sx={{ textAlign: 'center' }}
+                  secondary="Click the 'Add Habit' button to create your first habit!"
                 />
               </ListItem>
             )}
@@ -244,44 +202,15 @@ const Habits: React.FC = () => {
               fullWidth
               value={newHabitName}
               onChange={(e) => setNewHabitName(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && addHabit()}
             />
-            <FormControl fullWidth margin="dense">
-              <InputLabel>Category</InputLabel>
-              <Select
-                value={newHabitCategory}
-                label="Category"
-                onChange={(e) => setNewHabitCategory(e.target.value)}
-              >
-                {CATEGORIES.map((category) => (
-                  <MenuItem key={category.value} value={category.value}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      {category.icon}
-                      {category.label}
-                    </Box>
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
           </DialogContent>
           <DialogActions>
             <Button onClick={() => setOpen(false)}>Cancel</Button>
-            <Button onClick={addHabit} variant="contained">
+            <Button onClick={handleAddHabit} variant="contained" disabled={!newHabitName.trim()}>
               Add
             </Button>
           </DialogActions>
         </Dialog>
-
-        <Snackbar
-          open={showMessage}
-          autoHideDuration={3000}
-          onClose={() => setShowMessage(false)}
-          anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-        >
-          <Alert onClose={() => setShowMessage(false)} severity="success" sx={{ width: '100%' }}>
-            {message}
-          </Alert>
-        </Snackbar>
       </Box>
     </Container>
   );
