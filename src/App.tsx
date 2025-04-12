@@ -90,7 +90,7 @@ function App() {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <Router>
+      <Router basename="/Trackman">
         <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
           <AppContent />
           <Footer onToggleTheme={toggleTheme} />
