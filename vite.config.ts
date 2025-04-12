@@ -10,4 +10,7 @@ export default defineConfig({
     open: true,
   },
   base: '/Trackman/',
+  build: {
+    outDir: 'dist',
+  },
 })

@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, Link } from 'react-router-dom';
+import { HashRouter as Router, Routes, Route, Navigate, useLocation, Link } from 'react-router-dom';
 import { Box, CssBaseline, Container, Typography, Paper, Button } from '@mui/material';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import Habits from './pages/Habits';
@@ -90,7 +90,7 @@ function App() {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <Router basename="/Trackman">
+      <Router>
         <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
           <AppContent />
           <Footer onToggleTheme={toggleTheme} />
